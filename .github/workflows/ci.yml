@@ -1,0 +1,63 @@
+name: Continuous Integration (CI)
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # 1. Test & Build Go Backend
+  backend-ci:
+    name: Backend CI (Go Fiber)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: backend/go.sum
+
+      - name: Download Go Dependencies
+        run: |
+          cd backend
+          go mod download
+
+      - name: Run Go Unit & Integration Tests
+        run: |
+          cd backend
+          go test -v ./...
+
+      - name: Verify Go Compilation
+        run: |
+          cd backend
+          go build -v -o /dev/null ./...
+
+  # 2. Test & Build Vue 3 Frontend
+  frontend-ci:
+    name: Frontend CI (Vue 3 + Vite)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Test Production Vite Bundle Build
+        run: |
+          cd frontend
+          npm run build

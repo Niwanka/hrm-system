@@ -36,6 +36,7 @@ func SetupRoutes(app *fiber.App) {
 	protected.Post("/logout", controllers.Logout)
 	protected.Get("/me", controllers.Me)
 	protected.Get("/roles", middleware.RequireAccessLevel(10), controllers.GetRoles)
+	protected.Get("/departments", middleware.RequireAccessLevel(10), controllers.GetDepartments)
 
 	// Employees Directory & Hierarchy (Access Level 10+)
 	employees := protected.Group("/employees", middleware.RequireAccessLevel(10))
@@ -43,8 +44,12 @@ func SetupRoutes(app *fiber.App) {
 	employees.Get("/hierarchy", controllers.GetEmployeeHierarchy)
 	employees.Get("/:id", controllers.GetEmployeeByID)
 	
-	// Create Employee Endpoint (Requires Access Level 50+ Manager/HR/Admin)
+	// Create & Update Employee Endpoints (Requires Access Level 50+ Manager/HR/Admin)
 	employees.Post("/", middleware.RequireAccessLevel(50), controllers.CreateEmployee)
+	employees.Put("/:id", middleware.RequireAccessLevel(50), controllers.UpdateEmployee)
+
+	// Delete/Terminate Employee Endpoint (Requires Access Level 80+ HR/Admin)
+	employees.Delete("/:id", middleware.RequireAccessLevel(80), controllers.DeleteEmployee)
 
 	// Audit Trail Logs Endpoint (Requires Access Level 80+ for HR/Admin)
 	auditLogs := protected.Group("/audit-logs", middleware.RequireAccessLevel(80))
