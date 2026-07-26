@@ -32,11 +32,9 @@ func InitDB() *gorm.DB {
 	var dsn string
 
 	if databaseURL != "" {
-		// Fix unescaped special characters (e.g. '?') in database password inside URL
 		if u, parseErr := url.Parse(databaseURL); parseErr == nil {
 			dsn = u.String()
 		} else {
-			// Fallback: Use string as-is if raw DSN
 			dsn = databaseURL
 		}
 		log.Println("Connecting to PostgreSQL using DATABASE_URL environment variable...")
@@ -46,7 +44,11 @@ func InitDB() *gorm.DB {
 		log.Printf("Connecting to PostgreSQL at %s:%s (DB: %s)...", host, port, dbname)
 	}
 
-	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+	// Use PreferSimpleProtocol: true to disable prepared statement caching (Required for Supabase PgBouncer / Transaction Pooler)
+	db, err = gorm.Open(postgres.New(postgres.Config{
+		DSN:                  dsn,
+		PreferSimpleProtocol: true,
+	}), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 	})
 
@@ -54,7 +56,10 @@ func InitDB() *gorm.DB {
 	if err != nil && databaseURL == "" {
 		dsnDisable := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
 			host, user, password, dbname, port)
-		db, err = gorm.Open(postgres.Open(dsnDisable), &gorm.Config{
+		db, err = gorm.Open(postgres.New(postgres.Config{
+			DSN:                  dsnDisable,
+			PreferSimpleProtocol: true,
+		}), &gorm.Config{
 			Logger: logger.Default.LogMode(logger.Info),
 		})
 	}
@@ -64,14 +69,20 @@ func InitDB() *gorm.DB {
 		log.Printf("Direct connect to %s failed. Attempting auto-creation via default 'postgres' database...", dbname)
 		adminDSN := fmt.Sprintf("host=%s user=%s password=%s dbname=postgres port=%s sslmode=disable TimeZone=UTC",
 			host, user, password, port)
-		adminDB, adminErr := gorm.Open(postgres.Open(adminDSN), &gorm.Config{
+		adminDB, adminErr := gorm.Open(postgres.New(postgres.Config{
+			DSN:                  adminDSN,
+			PreferSimpleProtocol: true,
+		}), &gorm.Config{
 			Logger: logger.Default.LogMode(logger.Silent),
 		})
 
 		if adminErr == nil {
 			log.Printf("Creating PostgreSQL database '%s'...", dbname)
 			adminDB.Exec(fmt.Sprintf("CREATE DATABASE %s;", dbname))
-			db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+			db, err = gorm.Open(postgres.New(postgres.Config{
+				DSN:                  dsn,
+				PreferSimpleProtocol: true,
+			}), &gorm.Config{
 				Logger: logger.Default.LogMode(logger.Info),
 			})
 		}
