@@ -1,7 +1,10 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 
 	"hrm-backend/controllers"
 	"hrm-backend/middleware"
@@ -10,8 +13,22 @@ import (
 func SetupRoutes(app *fiber.App) {
 	api := app.Group("/api")
 
+	// Rate Limiter for Login Endpoint (Max 5 attempts per minute per IP)
+	loginLimiter := limiter.New(limiter.Config{
+		Max:        5,
+		Expiration: 1 * time.Minute,
+		LimitReached: func(c *fiber.Ctx) error {
+			middleware.LogAudit(c, nil, "RATE_LIMIT_EXCEEDED", "Too many login attempts from IP")
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Too many login attempts. Please wait 1 minute before trying again.",
+				"code":  "RATE_LIMIT_EXCEEDED",
+			})
+		},
+	})
+
 	// Public Auth Endpoints
-	api.Post("/login", controllers.Login)
+	api.Post("/login", loginLimiter, controllers.Login)
+	api.Post("/refresh", controllers.RefreshToken)
 
 	// Protected Endpoints
 	protected := api.Group("", middleware.AuthenticateJWT())
@@ -28,6 +45,10 @@ func SetupRoutes(app *fiber.App) {
 	
 	// Create Employee Endpoint (Requires Access Level 50+ Manager/HR/Admin)
 	employees.Post("/", middleware.RequireAccessLevel(50), controllers.CreateEmployee)
+
+	// Audit Trail Logs Endpoint (Requires Access Level 80+ for HR/Admin)
+	auditLogs := protected.Group("/audit-logs", middleware.RequireAccessLevel(80))
+	auditLogs.Get("/", controllers.GetAuditLogs)
 
 	// Payroll Endpoint (Access Level 80+ for HR/Admin)
 	payroll := protected.Group("/payroll", middleware.RequireAccessLevel(80))

@@ -6,6 +6,7 @@ import DashboardView from '../views/DashboardView.vue'
 import DirectoryView from '../views/DirectoryView.vue'
 import HierarchyView from '../views/HierarchyView.vue'
 import PayrollView from '../views/PayrollView.vue'
+import AuditLogsView from '../views/AuditLogsView.vue'
 
 const routes = [
   {
@@ -35,6 +36,12 @@ const routes = [
     name: 'Hierarchy',
     component: HierarchyView,
     meta: { requiresAuth: true, minAccessLevel: 10 },
+  },
+  {
+    path: '/audit-logs',
+    name: 'AuditLogs',
+    component: AuditLogsView,
+    meta: { requiresAuth: true, minAccessLevel: 80 }, // HR/Admin only
   },
   {
     path: '/payroll',

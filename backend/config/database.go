@@ -69,7 +69,7 @@ func InitDB() *gorm.DB {
 
 	// Auto Migration
 	log.Println("Running AutoMigrate for GORM models...")
-	err = db.AutoMigrate(&models.Role{}, &models.Employee{})
+	err = db.AutoMigrate(&models.Role{}, &models.Employee{}, &models.RefreshToken{}, &models.AuditLog{})
 	if err != nil {
 		log.Fatalf("Database AutoMigrate failed: %v", err)
 	}

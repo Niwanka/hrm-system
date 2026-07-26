@@ -10,6 +10,7 @@ import {
   DollarSign, 
   LogOut, 
   ShieldCheck, 
+  Activity,
   Sun, 
   Moon 
 } from 'lucide-vue-next'
@@ -39,11 +40,18 @@ const navItems = computed(() => [
     minLevel: 10,
   },
   {
+    name: 'Audit Trail Logs',
+    path: '/audit-logs',
+    icon: Activity,
+    minLevel: 80,
+    badge: 'Security',
+  },
+  {
     name: 'Company Payroll',
     path: '/payroll',
     icon: DollarSign,
     minLevel: 80,
-    badge: 'HR / Admin Only',
+    badge: 'HR / Admin',
   },
 ])
 
