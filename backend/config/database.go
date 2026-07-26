@@ -20,23 +20,36 @@ func InitDB() *gorm.DB {
 	var db *gorm.DB
 	var err error
 
-	host := getEnv("DB_HOST", "localhost")
-	user := getEnv("DB_USER", "postgres")
-	password := getEnv("DB_PASSWORD", "postgres")
-	dbname := getEnv("DB_NAME", "hrm_db")
-	port := getEnv("DB_PORT", "5432")
+	databaseURL := os.Getenv("DATABASE_URL")
+	var dsn string
 
-	// Attempt PostgreSQL Connection
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
-		host, user, password, dbname, port)
+	if databaseURL != "" {
+		dsn = databaseURL
+		log.Println("Using DATABASE_URL environment variable for PostgreSQL connection...")
+	} else {
+		host := getEnv("DB_HOST", "localhost")
+		user := getEnv("DB_USER", "postgres")
+		password := getEnv("DB_PASSWORD", "postgres")
+		dbname := getEnv("DB_NAME", "hrm_db")
+		port := getEnv("DB_PORT", "5432")
 
-	log.Printf("Connecting to PostgreSQL at %s:%s (DB: %s)...", host, port, dbname)
+		dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
+			host, user, password, dbname, port)
+		log.Printf("Connecting to PostgreSQL at %s:%s (DB: %s)...", host, port, dbname)
+	}
+
 	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 	})
 
 	// If database missing, attempt to connect to 'postgres' system DB and CREATE DATABASE hrm_db automatically
-	if err != nil {
+	if err != nil && databaseURL == "" {
+		host := getEnv("DB_HOST", "localhost")
+		user := getEnv("DB_USER", "postgres")
+		password := getEnv("DB_PASSWORD", "postgres")
+		dbname := getEnv("DB_NAME", "hrm_db")
+		port := getEnv("DB_PORT", "5432")
+
 		log.Printf("Direct connect to %s failed (%v). Attempting auto-creation via default 'postgres' database...", dbname, err)
 		adminDSN := fmt.Sprintf("host=%s user=%s password=%s dbname=postgres port=%s sslmode=disable TimeZone=UTC",
 			host, user, password, port)
