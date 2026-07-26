@@ -120,10 +120,10 @@ func InitDB() *gorm.DB {
 }
 
 func seedDatabase(db *gorm.DB) {
-	var roleCount int64
-	db.Model(&models.Role{}).Count(&roleCount)
-	if roleCount > 0 {
-		log.Println("Database already contains roles data. Skipping seeder.")
+	var empCount int64
+	db.Model(&models.Employee{}).Count(&empCount)
+	if empCount > 0 {
+		log.Println("Database already contains employee data. Skipping seeder.")
 		return
 	}
 
