@@ -3,7 +3,9 @@ package config
 import (
 	"fmt"
 	"log"
+	"net/url"
 	"os"
+	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
@@ -21,19 +23,25 @@ func InitDB() *gorm.DB {
 	var err error
 
 	databaseURL := os.Getenv("DATABASE_URL")
+	host := getEnv("DB_HOST", "localhost")
+	user := getEnv("DB_USER", "postgres")
+	password := getEnv("DB_PASSWORD", "postgres")
+	dbname := getEnv("DB_NAME", "hrm_db")
+	port := getEnv("DB_PORT", "5432")
+
 	var dsn string
 
 	if databaseURL != "" {
-		dsn = databaseURL
-		log.Println("Using DATABASE_URL environment variable for PostgreSQL connection...")
+		// Fix unescaped special characters (e.g. '?') in database password inside URL
+		if u, parseErr := url.Parse(databaseURL); parseErr == nil {
+			dsn = u.String()
+		} else {
+			// Fallback: Use string as-is if raw DSN
+			dsn = databaseURL
+		}
+		log.Println("Connecting to PostgreSQL using DATABASE_URL environment variable...")
 	} else {
-		host := getEnv("DB_HOST", "localhost")
-		user := getEnv("DB_USER", "postgres")
-		password := getEnv("DB_PASSWORD", "postgres")
-		dbname := getEnv("DB_NAME", "hrm_db")
-		port := getEnv("DB_PORT", "5432")
-
-		dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
+		dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=require TimeZone=UTC",
 			host, user, password, dbname, port)
 		log.Printf("Connecting to PostgreSQL at %s:%s (DB: %s)...", host, port, dbname)
 	}
@@ -42,15 +50,18 @@ func InitDB() *gorm.DB {
 		Logger: logger.Default.LogMode(logger.Info),
 	})
 
-	// If database missing, attempt to connect to 'postgres' system DB and CREATE DATABASE hrm_db automatically
+	// Retry with sslmode=disable for local fallback if sslmode=require fails
 	if err != nil && databaseURL == "" {
-		host := getEnv("DB_HOST", "localhost")
-		user := getEnv("DB_USER", "postgres")
-		password := getEnv("DB_PASSWORD", "postgres")
-		dbname := getEnv("DB_NAME", "hrm_db")
-		port := getEnv("DB_PORT", "5432")
+		dsnDisable := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
+			host, user, password, dbname, port)
+		db, err = gorm.Open(postgres.Open(dsnDisable), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Info),
+		})
+	}
 
-		log.Printf("Direct connect to %s failed (%v). Attempting auto-creation via default 'postgres' database...", dbname, err)
+	// Auto-creation attempt for local postgres database if database is missing
+	if err != nil && databaseURL == "" && strings.Contains(err.Error(), "does not exist") {
+		log.Printf("Direct connect to %s failed. Attempting auto-creation via default 'postgres' database...", dbname)
 		adminDSN := fmt.Sprintf("host=%s user=%s password=%s dbname=postgres port=%s sslmode=disable TimeZone=UTC",
 			host, user, password, port)
 		adminDB, adminErr := gorm.Open(postgres.Open(adminDSN), &gorm.Config{
@@ -60,21 +71,23 @@ func InitDB() *gorm.DB {
 		if adminErr == nil {
 			log.Printf("Creating PostgreSQL database '%s'...", dbname)
 			adminDB.Exec(fmt.Sprintf("CREATE DATABASE %s;", dbname))
-			// Retry connecting to newly created database
 			db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
 				Logger: logger.Default.LogMode(logger.Info),
 			})
 		}
 	}
 
-	// Fallback to SQLite if PostgreSQL service is unavailable locally
+	// Fallback to SQLite ONLY if running locally without DATABASE_URL
 	if err != nil {
+		if databaseURL != "" {
+			log.Fatalf("Fatal: Failed to connect to cloud PostgreSQL database (%v). Please verify DATABASE_URL or DB credentials.", err)
+		}
 		log.Printf("PostgreSQL unavailable (%v). Operating on local SQLite database (hrm.db)...", err)
 		db, err = gorm.Open(sqlite.Open("hrm.db"), &gorm.Config{
 			Logger: logger.Default.LogMode(logger.Info),
 		})
 		if err != nil {
-			log.Fatalf("Failed to initialize database connection: %v", err)
+			log.Fatalf("Failed to initialize local database connection: %v", err)
 		}
 	}
 
