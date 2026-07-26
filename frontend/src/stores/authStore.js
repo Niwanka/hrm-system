@@ -1,10 +1,13 @@
 import { defineStore } from 'pinia'
 import axios from 'axios'
 
+let isInterceptorSetup = false
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     user: JSON.parse(localStorage.getItem('hrm_user') || 'null'),
     token: localStorage.getItem('hrm_token') || '',
+    refreshToken: localStorage.getItem('hrm_refresh_token') || '',
     isLoading: false,
     error: null,
   }),
@@ -23,7 +26,44 @@ export const useAuthStore = defineStore('auth', {
   },
 
   actions: {
+    setupAxiosInterceptors() {
+      if (isInterceptorSetup) return
+      isInterceptorSetup = true
+
+      // Attach Authorization Header to all outgoing requests
+      axios.interceptors.request.use((config) => {
+        if (this.token) {
+          config.headers.Authorization = `Bearer ${this.token}`
+        }
+        return config
+      })
+
+      // Intercept 401 responses and attempt transparent token refresh
+      axios.interceptors.response.use(
+        (response) => response,
+        async (error) => {
+          const originalRequest = error.config
+
+          if (
+            error.response?.status === 401 &&
+            !originalRequest._retry &&
+            !originalRequest.url.includes('/api/login') &&
+            !originalRequest.url.includes('/api/refresh')
+          ) {
+            originalRequest._retry = true
+            const refreshed = await this.refreshAccessToken()
+            if (refreshed) {
+              originalRequest.headers.Authorization = `Bearer ${this.token}`
+              return axios(originalRequest)
+            }
+          }
+          return Promise.reject(error)
+        }
+      )
+    },
+
     async login(credentials) {
+      this.setupAxiosInterceptors()
       this.isLoading = true
       this.error = null
       try {
@@ -31,14 +71,15 @@ export const useAuthStore = defineStore('auth', {
           withCredentials: true,
         })
 
-        const { user, token } = response.data
+        const { user, token, refresh_token } = response.data
         this.user = user
         this.token = token
+        this.refreshToken = refresh_token
 
         localStorage.setItem('hrm_user', JSON.stringify(user))
         localStorage.setItem('hrm_token', token)
+        localStorage.setItem('hrm_refresh_token', refresh_token)
         
-        // Attach default Auth header for axios
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
 
         return { success: true }
@@ -50,7 +91,28 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    async refreshAccessToken() {
+      try {
+        const response = await axios.post(
+          '/api/refresh',
+          { refresh_token: this.refreshToken },
+          { withCredentials: true }
+        )
+
+        const { token } = response.data
+        this.token = token
+        localStorage.setItem('hrm_token', token)
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+        return true
+      } catch (err) {
+        console.warn('Session expired or refresh token revoked. Logging out.', err)
+        this.clearAuth()
+        return false
+      }
+    },
+
     async fetchCurrentUser() {
+      this.setupAxiosInterceptors()
       if (!this.token && !this.user) return
       try {
         const response = await axios.get('/api/me', {
@@ -78,8 +140,10 @@ export const useAuthStore = defineStore('auth', {
     clearAuth() {
       this.user = null
       this.token = ''
+      this.refreshToken = ''
       localStorage.removeItem('hrm_user')
       localStorage.removeItem('hrm_token')
+      localStorage.removeItem('hrm_refresh_token')
       delete axios.defaults.headers.common['Authorization']
     },
   },

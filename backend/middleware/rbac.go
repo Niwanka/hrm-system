@@ -1,13 +1,20 @@
 package middleware
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
+
+	"hrm-backend/config"
+	"hrm-backend/models"
 )
 
 var jwtSecret = []byte(getJWTSecret())
@@ -29,7 +36,8 @@ type UserClaims struct {
 	jwt.RegisteredClaims
 }
 
-func GenerateJWT(employeeID uint, accessLevel int, email, firstName, lastName, roleName string) (string, error) {
+// GenerateAccessToken generates a short-lived 15-minute Access Token
+func GenerateAccessToken(employeeID uint, accessLevel int, email, firstName, lastName, roleName string) (string, error) {
 	claims := UserClaims{
 		EmployeeID:  employeeID,
 		AccessLevel: accessLevel,
@@ -38,13 +46,47 @@ func GenerateJWT(employeeID uint, accessLevel int, email, firstName, lastName, r
 		LastName:    lastName,
 		RoleName:    roleName,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)), // 15-minute short-lived access
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(jwtSecret)
+}
+
+// GenerateRefreshTokenString generates a secure 32-byte crypto-random string
+func GenerateRefreshTokenString() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+// HashToken generates SHA-256 hash of a token string for safe DB storage
+func HashToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
+}
+
+// LogAudit records security and system audit trail events
+func LogAudit(c *fiber.Ctx, employeeID *uint, action, details string) {
+	ip := c.IP()
+	userAgent := c.Get("User-Agent")
+
+	auditEntry := models.AuditLog{
+		EmployeeID: employeeID,
+		Action:     action,
+		IPAddress:  ip,
+		UserAgent:  userAgent,
+		Details:    details,
+		CreatedAt:  time.Now(),
+	}
+
+	if err := config.DB.Create(&auditEntry).Error; err != nil {
+		log.Printf("Failed to record audit log: %v", err)
+	}
 }
 
 func AuthenticateJWT() fiber.Handler {
@@ -64,7 +106,7 @@ func AuthenticateJWT() fiber.Handler {
 
 		if tokenString == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Authentication required. No valid token found.",
+				"error": "Authentication required. No valid access token found.",
 			})
 		}
 
@@ -77,7 +119,8 @@ func AuthenticateJWT() fiber.Handler {
 
 		if err != nil || !token.Valid {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Invalid or expired token",
+				"error": "Access token expired or invalid",
+				"code":  "TOKEN_EXPIRED",
 			})
 		}
 
@@ -110,6 +153,7 @@ func RequireAccessLevel(minLevel int) fiber.Handler {
 		}
 
 		if claims.AccessLevel < minLevel {
+			LogAudit(c, &claims.EmployeeID, "ACCESS_DENIED", fmt.Sprintf("Attempted access to route requiring level %d", minLevel))
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 				"error": fmt.Sprintf("Forbidden: Requires minimum access level %d (your level: %d)", minLevel, claims.AccessLevel),
 			})
