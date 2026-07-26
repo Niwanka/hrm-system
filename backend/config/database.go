@@ -69,7 +69,7 @@ func InitDB() *gorm.DB {
 
 	// Auto Migration
 	log.Println("Running AutoMigrate for GORM models...")
-	err = db.AutoMigrate(&models.Role{}, &models.Employee{}, &models.RefreshToken{}, &models.AuditLog{})
+	err = db.AutoMigrate(&models.Role{}, &models.Department{}, &models.Employee{}, &models.RefreshToken{}, &models.AuditLog{})
 	if err != nil {
 		log.Fatalf("Database AutoMigrate failed: %v", err)
 	}
@@ -90,8 +90,9 @@ func seedDatabase(db *gorm.DB) {
 		return
 	}
 
-	log.Println("Seeding initial Roles & Organizational Hierarchy...")
+	log.Println("Seeding initial Roles, Departments & Organizational Hierarchy...")
 
+	// 1. Seed Roles
 	roles := []models.Role{
 		{Name: "Admin", AccessLevel: 100},
 		{Name: "HR", AccessLevel: 80},
@@ -103,11 +104,28 @@ func seedDatabase(db *gorm.DB) {
 		db.Create(&roles[i])
 	}
 
-	// Roles reference
+	// 2. Seed Departments
+	departments := []models.Department{
+		{Name: "Executive", Description: "Executive Leadership & Board"},
+		{Name: "People Ops", Description: "Human Resources, Talent Acquisition & Payroll"},
+		{Name: "Engineering", Description: "Software Engineering & Infrastructure"},
+		{Name: "Sales", Description: "Enterprise Sales & Account Management"},
+		{Name: "Finance", Description: "Corporate Finance & Disbursals"},
+	}
+
+	for i := range departments {
+		db.Create(&departments[i])
+	}
+
+	// Reference IDs
 	adminRole := roles[0]
 	hrRole := roles[1]
 	managerRole := roles[2]
 	employeeRole := roles[3]
+
+	execDept := departments[0]
+	hrDept := departments[1]
+	engDept := departments[2]
 
 	defaultPasswordHash, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
 
@@ -118,6 +136,8 @@ func seedDatabase(db *gorm.DB) {
 		Email:        "admin@company.com",
 		PasswordHash: string(defaultPasswordHash),
 		RoleID:       adminRole.ID,
+		DepartmentID: &execDept.ID,
+		Status:       "Active",
 		ManagerID:    nil,
 	}
 	db.Create(&ceo)
@@ -129,6 +149,8 @@ func seedDatabase(db *gorm.DB) {
 		Email:        "hr@company.com",
 		PasswordHash: string(defaultPasswordHash),
 		RoleID:       hrRole.ID,
+		DepartmentID: &hrDept.ID,
+		Status:       "Active",
 		ManagerID:    &ceo.ID,
 	}
 	db.Create(&hrDir)
@@ -140,6 +162,8 @@ func seedDatabase(db *gorm.DB) {
 		Email:        "manager@company.com",
 		PasswordHash: string(defaultPasswordHash),
 		RoleID:       managerRole.ID,
+		DepartmentID: &engDept.ID,
+		Status:       "Active",
 		ManagerID:    &ceo.ID,
 	}
 	db.Create(&engManager)
@@ -151,6 +175,8 @@ func seedDatabase(db *gorm.DB) {
 		Email:        "employee@company.com",
 		PasswordHash: string(defaultPasswordHash),
 		RoleID:       employeeRole.ID,
+		DepartmentID: &engDept.ID,
+		Status:       "Active",
 		ManagerID:    &engManager.ID,
 	}
 	db.Create(&dev1)
@@ -161,11 +187,13 @@ func seedDatabase(db *gorm.DB) {
 		Email:        "david@company.com",
 		PasswordHash: string(defaultPasswordHash),
 		RoleID:       employeeRole.ID,
+		DepartmentID: &engDept.ID,
+		Status:       "Active",
 		ManagerID:    &engManager.ID,
 	}
 	db.Create(&dev2)
 
-	log.Println("Database seeder completed successfully! Sample Users Inserted:")
+	log.Println("Database seeder completed successfully! Sample Users & Departments Inserted:")
 	log.Println(" 1. Admin:    admin@company.com    / password123 (Access Level 100)")
 	log.Println(" 2. HR:       hr@company.com       / password123 (Access Level 80)")
 	log.Println(" 3. Manager:  manager@company.com  / password123 (Access Level 50)")
