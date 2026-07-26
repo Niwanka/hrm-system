@@ -1,0 +1,23 @@
+# Operating System
+.DS_Store
+Thumbs.db
+
+# Go Backend
+backend/main
+backend/backend
+backend/*.db
+backend/*.db-journal
+backend/*.exe
+
+# Node / Vite Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Environment Variables & Secrets
+.env
+.env.local
+*.secret

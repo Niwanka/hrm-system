@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 transition-colors duration-300;
+  }
+  
+  html.dark body {
+    background-color: #09090b;
+    color: #f1f5f9;
+  }
+}
+
+/* Custom Emerald Glow Effects & Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-slate-100 dark:bg-[#09090b];
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 dark:bg-[#27272a] rounded;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #10b981;
+}
+
+.emerald-glow {
+  box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.4);
+}
+
+.emerald-border-glow {
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+}
+
+.glass-card {
+  @apply bg-white/90 dark:bg-[#121215]/80 backdrop-blur-md border border-slate-200 dark:border-[#27272a] shadow-xl dark:shadow-2xl;
+}
