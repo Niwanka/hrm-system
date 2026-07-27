@@ -106,7 +106,17 @@ func InitDB() *gorm.DB {
 
 	// Auto Migration
 	log.Println("Running AutoMigrate for GORM models...")
-	err = db.AutoMigrate(&models.Role{}, &models.Department{}, &models.Employee{}, &models.RefreshToken{}, &models.AuditLog{})
+	err = db.AutoMigrate(
+		&models.Role{},
+		&models.Department{},
+		&models.Employee{},
+		&models.RefreshToken{},
+		&models.AuditLog{},
+		&models.LeaveType{},
+		&models.LeaveRequest{},
+		&models.LeaveBalance{},
+		&models.AttendanceLog{},
+	)
 	if err != nil {
 		log.Fatalf("Database AutoMigrate failed: %v", err)
 	}
@@ -122,120 +132,147 @@ func InitDB() *gorm.DB {
 func seedDatabase(db *gorm.DB) {
 	var empCount int64
 	db.Model(&models.Employee{}).Count(&empCount)
-	if empCount > 0 {
-		log.Println("Database already contains employee data. Skipping seeder.")
-		return
+	if empCount == 0 {
+		log.Println("Seeding initial Roles, Departments & Organizational Hierarchy...")
+
+		// 1. Seed Roles
+		roles := []models.Role{
+			{Name: "Admin", AccessLevel: 100},
+			{Name: "HR", AccessLevel: 80},
+			{Name: "Manager", AccessLevel: 50},
+			{Name: "Employee", AccessLevel: 10},
+		}
+
+		for i := range roles {
+			db.Create(&roles[i])
+		}
+
+		// 2. Seed Departments
+		departments := []models.Department{
+			{Name: "Executive", Description: "Executive Leadership & Board"},
+			{Name: "People Ops", Description: "Human Resources, Talent Acquisition & Payroll"},
+			{Name: "Engineering", Description: "Software Engineering & Infrastructure"},
+			{Name: "Sales", Description: "Enterprise Sales & Account Management"},
+			{Name: "Finance", Description: "Corporate Finance & Disbursals"},
+		}
+
+		for i := range departments {
+			db.Create(&departments[i])
+		}
+
+		// Reference IDs
+		adminRole := roles[0]
+		hrRole := roles[1]
+		managerRole := roles[2]
+		employeeRole := roles[3]
+
+		execDept := departments[0]
+		hrDept := departments[1]
+		engDept := departments[2]
+
+		defaultPasswordHash, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+
+		// CEO / Top Manager
+		ceo := models.Employee{
+			FirstName:    "Alex",
+			LastName:     "Vance",
+			Email:        "admin@company.com",
+			PasswordHash: string(defaultPasswordHash),
+			RoleID:       adminRole.ID,
+			DepartmentID: &execDept.ID,
+			Status:       "Active",
+			ManagerID:    nil,
+		}
+		db.Create(&ceo)
+
+		// HR Director
+		hrDir := models.Employee{
+			FirstName:    "Sarah",
+			LastName:     "Connor",
+			Email:        "hr@company.com",
+			PasswordHash: string(defaultPasswordHash),
+			RoleID:       hrRole.ID,
+			DepartmentID: &hrDept.ID,
+			Status:       "Active",
+			ManagerID:    &ceo.ID,
+		}
+		db.Create(&hrDir)
+
+		// Engineering Manager
+		engManager := models.Employee{
+			FirstName:    "Marcus",
+			LastName:     "Brody",
+			Email:        "manager@company.com",
+			PasswordHash: string(defaultPasswordHash),
+			RoleID:       managerRole.ID,
+			DepartmentID: &engDept.ID,
+			Status:       "Active",
+			ManagerID:    &ceo.ID,
+		}
+		db.Create(&engManager)
+
+		// Direct Reports under Engineering Manager
+		dev1 := models.Employee{
+			FirstName:    "Elena",
+			LastName:     "Rostova",
+			Email:        "employee@company.com",
+			PasswordHash: string(defaultPasswordHash),
+			RoleID:       employeeRole.ID,
+			DepartmentID: &engDept.ID,
+			Status:       "Active",
+			ManagerID:    &engManager.ID,
+		}
+		db.Create(&dev1)
+
+		dev2 := models.Employee{
+			FirstName:    "David",
+			LastName:     "Kim",
+			Email:        "david@company.com",
+			PasswordHash: string(defaultPasswordHash),
+			RoleID:       employeeRole.ID,
+			DepartmentID: &engDept.ID,
+			Status:       "Active",
+			ManagerID:    &engManager.ID,
+		}
+		db.Create(&dev2)
 	}
 
-	log.Println("Seeding initial Roles, Departments & Organizational Hierarchy...")
+	// Seed Leave Types & Initial Leave Balances if missing
+	var leaveTypeCount int64
+	db.Model(&models.LeaveType{}).Count(&leaveTypeCount)
+	if leaveTypeCount == 0 {
+		log.Println("Seeding initial PeoplesHR Leave Types...")
+		leaveTypes := []models.LeaveType{
+			{Name: "Annual Leave", MaxDaysPerYear: 14},
+			{Name: "Casual Leave", MaxDaysPerYear: 7},
+			{Name: "Sick Leave", MaxDaysPerYear: 7},
+			{Name: "Maternity Leave", MaxDaysPerYear: 84},
+		}
 
-	// 1. Seed Roles
-	roles := []models.Role{
-		{Name: "Admin", AccessLevel: 100},
-		{Name: "HR", AccessLevel: 80},
-		{Name: "Manager", AccessLevel: 50},
-		{Name: "Employee", AccessLevel: 10},
+		for i := range leaveTypes {
+			db.Create(&leaveTypes[i])
+		}
+
+		// Ensure all existing employees have LeaveBalances initialized
+		var allEmps []models.Employee
+		db.Find(&allEmps)
+
+		var createdLeaveTypes []models.LeaveType
+		db.Find(&createdLeaveTypes)
+
+		for _, emp := range allEmps {
+			for _, lt := range createdLeaveTypes {
+				db.Create(&models.LeaveBalance{
+					EmployeeID:    emp.ID,
+					LeaveTypeID:   lt.ID,
+					AllocatedDays: lt.MaxDaysPerYear,
+					UsedDays:      0,
+					RemainingDays: lt.MaxDaysPerYear,
+				})
+			}
+		}
+		log.Println("Leave Types & Employee Balances seeded successfully!")
 	}
-
-	for i := range roles {
-		db.Create(&roles[i])
-	}
-
-	// 2. Seed Departments
-	departments := []models.Department{
-		{Name: "Executive", Description: "Executive Leadership & Board"},
-		{Name: "People Ops", Description: "Human Resources, Talent Acquisition & Payroll"},
-		{Name: "Engineering", Description: "Software Engineering & Infrastructure"},
-		{Name: "Sales", Description: "Enterprise Sales & Account Management"},
-		{Name: "Finance", Description: "Corporate Finance & Disbursals"},
-	}
-
-	for i := range departments {
-		db.Create(&departments[i])
-	}
-
-	// Reference IDs
-	adminRole := roles[0]
-	hrRole := roles[1]
-	managerRole := roles[2]
-	employeeRole := roles[3]
-
-	execDept := departments[0]
-	hrDept := departments[1]
-	engDept := departments[2]
-
-	defaultPasswordHash, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
-
-	// CEO / Top Manager
-	ceo := models.Employee{
-		FirstName:    "Alex",
-		LastName:     "Vance",
-		Email:        "admin@company.com",
-		PasswordHash: string(defaultPasswordHash),
-		RoleID:       adminRole.ID,
-		DepartmentID: &execDept.ID,
-		Status:       "Active",
-		ManagerID:    nil,
-	}
-	db.Create(&ceo)
-
-	// HR Director
-	hrDir := models.Employee{
-		FirstName:    "Sarah",
-		LastName:     "Connor",
-		Email:        "hr@company.com",
-		PasswordHash: string(defaultPasswordHash),
-		RoleID:       hrRole.ID,
-		DepartmentID: &hrDept.ID,
-		Status:       "Active",
-		ManagerID:    &ceo.ID,
-	}
-	db.Create(&hrDir)
-
-	// Engineering Manager
-	engManager := models.Employee{
-		FirstName:    "Marcus",
-		LastName:     "Brody",
-		Email:        "manager@company.com",
-		PasswordHash: string(defaultPasswordHash),
-		RoleID:       managerRole.ID,
-		DepartmentID: &engDept.ID,
-		Status:       "Active",
-		ManagerID:    &ceo.ID,
-	}
-	db.Create(&engManager)
-
-	// Direct Reports under Engineering Manager
-	dev1 := models.Employee{
-		FirstName:    "Elena",
-		LastName:     "Rostova",
-		Email:        "employee@company.com",
-		PasswordHash: string(defaultPasswordHash),
-		RoleID:       employeeRole.ID,
-		DepartmentID: &engDept.ID,
-		Status:       "Active",
-		ManagerID:    &engManager.ID,
-	}
-	db.Create(&dev1)
-
-	dev2 := models.Employee{
-		FirstName:    "David",
-		LastName:     "Kim",
-		Email:        "david@company.com",
-		PasswordHash: string(defaultPasswordHash),
-		RoleID:       employeeRole.ID,
-		DepartmentID: &engDept.ID,
-		Status:       "Active",
-		ManagerID:    &engManager.ID,
-	}
-	db.Create(&dev2)
-
-	log.Println("Database seeder completed successfully! Sample Users & Departments Inserted:")
-	log.Println(" 1. Admin:    admin@company.com    / password123 (Access Level 100)")
-	log.Println(" 2. HR:       hr@company.com       / password123 (Access Level 80)")
-	log.Println(" 3. Manager:  manager@company.com  / password123 (Access Level 50)")
-	log.Println(" 4. Employee: employee@company.com / password123 (Access Level 10)")
-	log.Println(" 5. Employee: david@company.com    / password123 (Access Level 10)")
 }
 
 func getEnv(key, fallback string) string {
