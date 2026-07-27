@@ -92,13 +92,13 @@ func Login(c *fiber.Ctx) error {
 		})
 	}
 
-	// 4. Set HTTP-Only Cookies
 	accessCookie := new(fiber.Cookie)
 	accessCookie.Name = "jwt"
 	accessCookie.Value = accessToken
 	accessCookie.Expires = time.Now().Add(15 * time.Minute)
 	accessCookie.HTTPOnly = true
-	accessCookie.SameSite = "Lax"
+	accessCookie.SameSite = "None"
+	accessCookie.Secure = true
 	c.Cookie(accessCookie)
 
 	refreshCookie := new(fiber.Cookie)
@@ -106,7 +106,8 @@ func Login(c *fiber.Ctx) error {
 	refreshCookie.Value = refreshTokenString
 	refreshCookie.Expires = time.Now().Add(7 * 24 * time.Hour)
 	refreshCookie.HTTPOnly = true
-	refreshCookie.SameSite = "Lax"
+	refreshCookie.SameSite = "None"
+	refreshCookie.Secure = true
 	c.Cookie(refreshCookie)
 
 	// Log Audit Event
@@ -187,7 +188,8 @@ func RefreshToken(c *fiber.Ctx) error {
 	accessCookie.Value = newAccessToken
 	accessCookie.Expires = time.Now().Add(15 * time.Minute)
 	accessCookie.HTTPOnly = true
-	accessCookie.SameSite = "Lax"
+	accessCookie.SameSite = "None"
+	accessCookie.Secure = true
 	c.Cookie(accessCookie)
 
 	middleware.LogAudit(c, &employee.ID, "TOKEN_REFRESH_SUCCESS", "Access token renewed successfully via refresh token")
@@ -252,6 +254,8 @@ func Logout(c *fiber.Ctx) error {
 	accessCookie.Value = ""
 	accessCookie.Expires = time.Now().Add(-1 * time.Hour)
 	accessCookie.HTTPOnly = true
+	accessCookie.SameSite = "None"
+	accessCookie.Secure = true
 	c.Cookie(accessCookie)
 
 	refreshCookie := new(fiber.Cookie)
@@ -259,6 +263,8 @@ func Logout(c *fiber.Ctx) error {
 	refreshCookie.Value = ""
 	refreshCookie.Expires = time.Now().Add(-1 * time.Hour)
 	refreshCookie.HTTPOnly = true
+	refreshCookie.SameSite = "None"
+	refreshCookie.Secure = true
 	c.Cookie(refreshCookie)
 
 	middleware.LogAudit(c, employeeID, "LOGOUT", "User logged out successfully")
