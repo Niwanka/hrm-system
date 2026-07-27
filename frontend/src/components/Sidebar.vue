@@ -7,6 +7,8 @@ import {
   LayoutDashboard, 
   Users, 
   GitFork, 
+  Palmtree,
+  Clock,
   DollarSign, 
   LogOut, 
   ShieldCheck, 
@@ -38,6 +40,20 @@ const navItems = computed(() => [
     path: '/hierarchy',
     icon: GitFork,
     minLevel: 10,
+  },
+  {
+    name: 'Attendance & Timesheets',
+    path: '/attendance',
+    icon: Clock,
+    minLevel: 10,
+    badge: 'Daily Log',
+  },
+  {
+    name: 'Leave & Absence',
+    path: '/leave',
+    icon: Palmtree,
+    minLevel: 10,
+    badge: 'Leave',
   },
   {
     name: 'Audit Trail Logs',
@@ -78,7 +94,7 @@ const handleLogout = async () => {
             <h1 class="font-bold text-lg tracking-wider text-slate-900 dark:text-white flex items-center gap-1.5">
               HRM<span class="text-emerald-500 dark:text-emerald-400 font-extrabold">CORE</span>
             </h1>
-            <p class="text-[11px] text-emerald-600 dark:text-emerald-400/80 font-mono tracking-tight uppercase">RBAC Engine</p>
+            <p class="text-[11px] text-emerald-600 dark:text-emerald-400/80 font-mono tracking-tight uppercase">Enterprise HRIS</p>
           </div>
         </div>
 

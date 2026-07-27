@@ -5,6 +5,8 @@ import LoginView from '../views/LoginView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import DirectoryView from '../views/DirectoryView.vue'
 import HierarchyView from '../views/HierarchyView.vue'
+import LeaveView from '../views/LeaveView.vue'
+import AttendanceView from '../views/AttendanceView.vue'
 import PayrollView from '../views/PayrollView.vue'
 import AuditLogsView from '../views/AuditLogsView.vue'
 
@@ -35,6 +37,18 @@ const routes = [
     path: '/hierarchy',
     name: 'Hierarchy',
     component: HierarchyView,
+    meta: { requiresAuth: true, minAccessLevel: 10 },
+  },
+  {
+    path: '/leave',
+    name: 'Leave',
+    component: LeaveView,
+    meta: { requiresAuth: true, minAccessLevel: 10 },
+  },
+  {
+    path: '/attendance',
+    name: 'Attendance',
+    component: AttendanceView,
     meta: { requiresAuth: true, minAccessLevel: 10 },
   },
   {

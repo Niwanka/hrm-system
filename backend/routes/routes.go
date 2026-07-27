@@ -51,6 +51,22 @@ func SetupRoutes(app *fiber.App) {
 	// Delete/Terminate Employee Endpoint (Requires Access Level 80+ HR/Admin)
 	employees.Delete("/:id", middleware.RequireAccessLevel(80), controllers.DeleteEmployee)
 
+	// Leave Management Endpoints
+	leave := protected.Group("/leave", middleware.RequireAccessLevel(10))
+	leave.Get("/my-data", controllers.GetMyLeaveData)
+	leave.Post("/request", controllers.SubmitLeaveRequest)
+	leave.Get("/pending", middleware.RequireAccessLevel(50), controllers.GetPendingLeaveRequests)
+	leave.Put("/:id/approve", middleware.RequireAccessLevel(50), controllers.ApproveLeaveRequest)
+	leave.Put("/:id/reject", middleware.RequireAccessLevel(50), controllers.RejectLeaveRequest)
+
+	// Attendance & Timesheet Endpoints
+	attendance := protected.Group("/attendance", middleware.RequireAccessLevel(10))
+	attendance.Get("/today", controllers.GetTodayAttendance)
+	attendance.Post("/clock-in", controllers.ClockIn)
+	attendance.Post("/clock-out", controllers.ClockOut)
+	attendance.Get("/my-logs", controllers.GetMyAttendanceLogs)
+	attendance.Get("/team-logs", middleware.RequireAccessLevel(50), controllers.GetTeamAttendanceLogs)
+
 	// Audit Trail Logs Endpoint (Requires Access Level 80+ for HR/Admin)
 	auditLogs := protected.Group("/audit-logs", middleware.RequireAccessLevel(80))
 	auditLogs.Get("/", controllers.GetAuditLogs)
